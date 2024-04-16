@@ -1,5 +1,4 @@
 from datetime import datetime as dt
-from urllib.parse import unquote
 from http import HTTPStatus
 from django.http import HttpResponse
 from rest_framework.viewsets import ModelViewSet
@@ -8,9 +7,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import permissions
 from django_filters.rest_framework import DjangoFilterBackend
-from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank, TrigramSimilarity
+from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 from django.db.models import Sum
-from django.shortcuts import get_object_or_404
 
 from apis import serializers as apis_serializers
 from . import models as foods_models
