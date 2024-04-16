@@ -32,7 +32,7 @@ services:
       - ../frontend/:/app/result_build/
 
   nginx:
-    image: nginx:1.21.3-alpine
+    image: kaluginpeter/foodgram_gateway:latest
     ports:
       - 8080:80
     volumes:
