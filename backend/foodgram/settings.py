@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-CSRF_TRUSTED_ORIGINS = os.getenv('ALLOWED_HOSTS', '').split()
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split()
 
-CORS_ALLOWED_ORIGINS = os.getenv('ALLOWED_HOSTS', '').split()
+CORS_ALLOWED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split()
 
 AUTH_USER_MODEL = 'users.CustomUser'
 
