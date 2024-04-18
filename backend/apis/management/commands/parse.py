@@ -1,14 +1,13 @@
 import os
 import django
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'foodgram.settings')
-django.setup()
-
 import csv
 from django.core.management.base import BaseCommand
 from django.conf import settings
 
 from foods.models import Ingredient
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'foodgram.settings')
+django.setup()
 
 
 class Command(BaseCommand):
