@@ -55,7 +55,7 @@ class IngredientViewSet(ModelViewSet):
 
 class RecipeViewSet(ModelViewSet):
     queryset = foods_models.Recipe.objects.all()
-    parser_classes = CustomPagination
+    pagination_class = CustomPagination
     lookup_field = 'id'
     permission_classes = (IsAuthorOrPersonal,)
     http_method_names = ['get', 'post', 'delete', 'patch']
