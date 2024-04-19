@@ -128,6 +128,8 @@ jobs:
             cd foodgram/infra
             sudo docker compose -f docker-compose.yml -v down
             sudo docker rm -f infra-backend-1 infra-frontend-1 infra-db-1 infra-nginx-1 || true
+            sudo docker pull kaluginpeter/foodgram_backend
+            sudo docker pull kaluginpeter/foodgram_frontend
             sudo docker compose -f docker-compose.yml up -d --build
 
   send_message:
