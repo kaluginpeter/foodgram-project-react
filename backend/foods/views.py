@@ -11,6 +11,7 @@ from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 from django.db.models import Sum
 
 from apis import serializers as apis_serializers
+from apis.pagination import CustomPagination
 from . import models as foods_models
 from .filters import RecipeFilter, IngredientFilter
 from .permissions import IsAuthorOrPersonal
@@ -54,6 +55,7 @@ class IngredientViewSet(ModelViewSet):
 
 class RecipeViewSet(ModelViewSet):
     queryset = foods_models.Recipe.objects.all()
+    parser_classes = CustomPagination
     lookup_field = 'id'
     permission_classes = (IsAuthorOrPersonal,)
     http_method_names = ['get', 'post', 'delete', 'patch']
