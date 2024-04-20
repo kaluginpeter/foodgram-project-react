@@ -7,7 +7,6 @@ from rest_framework import serializers
 from rest_framework import status
 from djoser import serializers as djoser_serializers
 
-from users.models import Follow
 from foods.models import (
     Recipe, Tag,
     Ingredient, RecipeIngredient
