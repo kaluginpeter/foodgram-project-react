@@ -39,10 +39,10 @@ class CustomAccountManager(BaseUserManager):
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(
-        max_length=254, blank=False, unique=True, verbose_name='Email Adress'
+        max_length=254, unique=True, verbose_name='Email Adress'
     )
     username = models.CharField(
-        max_length=150, blank=False, unique=True,
+        max_length=150, unique=True,
         verbose_name='Username',
         validators=[
             RegexValidator(
@@ -51,19 +51,25 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ]
     )
     first_name = models.CharField(
-        max_length=150, blank=False, verbose_name='First name'
+        max_length=150, verbose_name='First name'
     )
     last_name = models.CharField(
-        max_length=150, blank=False, verbose_name='Last name'
+        max_length=150, verbose_name='Last name'
     )
     password = models.CharField(
-        max_length=150, blank=False, verbose_name='Password'
+        max_length=150, verbose_name='Password'
     )
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = ['password', 'email', 'first_name', 'last_name']
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     objects = CustomAccountManager()
+
+    class Meta:
+        ordering = ['-id']
+
+    def __str__(self) -> str:
+        return self.username
 
 
 class Follow(models.Model):
@@ -81,9 +87,13 @@ class Follow(models.Model):
     )
 
     class Meta:
+        ordering = ['-id']
         constraints = [
             models.UniqueConstraint(
                 fields=['user', 'author'],
                 name='unique following'
             )
         ]
+
+    def __str__(self) -> str:
+        return f'{self.user.username} - {self.author.username}'

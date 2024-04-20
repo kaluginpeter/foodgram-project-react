@@ -1,17 +1,18 @@
 from datetime import datetime as dt
 from http import HTTPStatus
+
 from django.http import HttpResponse
+from django_filters.rest_framework import DjangoFilterBackend
+from django.contrib.postgres.search import SearchVector, TrigramSimilarity
+from django.db.models import Sum
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.filters import SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import permissions
-from django_filters.rest_framework import DjangoFilterBackend
-from django.contrib.postgres.search import SearchVector, TrigramSimilarity
-from django.db.models import Sum
 
-from apis import serializers as apis_serializers
-from apis.pagination import CustomPagination
+from api import serializers as api_serializers
+from api.pagination import CustomPagination
 from . import models as foods_models
 from .filters import RecipeFilter, IngredientFilter
 from .permissions import IsAuthorOrPersonal
@@ -19,14 +20,14 @@ from .permissions import IsAuthorOrPersonal
 
 class TagViewSet(ModelViewSet):
     queryset = foods_models.Tag.objects.all()
-    serializer_class = apis_serializers.TagSerializer
+    serializer_class = api_serializers.TagSerializer
     pagination_class = None
     http_method_names = ['get']
     lookup_field = 'id'
 
 
 class IngredientViewSet(ModelViewSet):
-    serializer_class = apis_serializers.IngredientSerializer
+    serializer_class = api_serializers.IngredientSerializer
     pagination_class = None
     http_method_names = ['get']
     lookup_field = 'id'
@@ -36,17 +37,17 @@ class IngredientViewSet(ModelViewSet):
 
     def get_queryset(self):
         queryset = foods_models.Ingredient.objects.all()
-        query = self.request.GET.get('name')
-        if query:
-            q = query.lower()
+        query_attr = self.request.GET.get('name')
+        if query_attr:
+            query_attr = query_attr.lower()
             vector = SearchVector('name')
             vector_trgm = TrigramSimilarity(
-                'name', q, raw=True, fields=('name')
+                'name', query_attr, raw=True, fields=('name')
             )
             return queryset.annotate(
                 search=vector
             ).order_by('name').filter(
-                search=q
+                search=query_attr
             ) or queryset.annotate(
                 similarity=vector_trgm
             ).filter(similarity__gt=0.3).order_by('name')
@@ -64,8 +65,8 @@ class RecipeViewSet(ModelViewSet):
 
     def get_serializer_class(self):
         if self.request.method == permissions.SAFE_METHODS:
-            return apis_serializers.RecipeSerializer
-        return apis_serializers.CreateRecipeSerializer
+            return api_serializers.RecipeSerializer
+        return api_serializers.CreateRecipeSerializer
 
     @action(
         detail=True,
@@ -82,8 +83,8 @@ class RecipeViewSet(ModelViewSet):
                     data={'errors': 'Not existing recipe'},
                     status=HTTPStatus.BAD_REQUEST
                 )
-            if foods_models.Favorite.objects.filter(
-                author=request.user, recipe__id=id
+            if recipe.favorite_recipes.filter(
+                author=request.user
             ).exists():
                 return Response(
                     data={'errors': 'Recipe has already added!'},
@@ -92,26 +93,25 @@ class RecipeViewSet(ModelViewSet):
             foods_models.Favorite.objects.create(
                 author=request.user, recipe=recipe
             )
-            serializer = apis_serializers.RecipeShortSerializer(recipe)
+            serializer = api_serializers.RecipeShortSerializer(recipe)
             return Response(serializer.data, status=HTTPStatus.CREATED)
-        else:
-            try:
-                recipe = foods_models.Recipe.objects.get(id=id)
-            except foods_models.Recipe.DoesNotExist:
-                return Response(
-                    data={'errors': 'Not existing recipe'},
-                    status=HTTPStatus.NOT_FOUND
-                )
-            instc = foods_models.Favorite.objects.filter(
-                author=request.user, recipe__id=id
-            )
-            if instc.exists():
-                instc.delete()
-                return Response(status=HTTPStatus.NO_CONTENT)
+        try:
+            recipe = foods_models.Recipe.objects.get(id=id)
+        except foods_models.Recipe.DoesNotExist:
             return Response(
-                data={'errors': 'Recipe has already deleted!'},
-                status=HTTPStatus.BAD_REQUEST
+                data={'errors': 'Not existing recipe'},
+                status=HTTPStatus.NOT_FOUND
             )
+        instc = recipe.favorite_recipes.filter(
+            author=request.user
+        )
+        if instc.exists():
+            instc.delete()
+            return Response(status=HTTPStatus.NO_CONTENT)
+        return Response(
+            data={'errors': 'Recipe has already deleted!'},
+            status=HTTPStatus.BAD_REQUEST
+        )
 
     @action(
         detail=True,
@@ -128,8 +128,8 @@ class RecipeViewSet(ModelViewSet):
                     data={'errors': 'Not existing recipe'},
                     status=HTTPStatus.BAD_REQUEST
                 )
-            if foods_models.ShoppingList.objects.filter(
-                author=request.user, recipe__id=id
+            if recipe.shopping_list_recipes.filter(
+                author=request.user
             ).exists():
                 return Response(
                     data={'errors': 'Recipe has already added!'},
@@ -138,26 +138,25 @@ class RecipeViewSet(ModelViewSet):
             foods_models.ShoppingList.objects.create(
                 author=request.user, recipe=recipe
             )
-            serializer = apis_serializers.RecipeShortSerializer(recipe)
+            serializer = api_serializers.RecipeShortSerializer(recipe)
             return Response(serializer.data, status=HTTPStatus.CREATED)
-        else:
-            try:
-                recipe = foods_models.Recipe.objects.get(id=id)
-            except foods_models.Recipe.DoesNotExist:
-                return Response(
-                    data={'errors': 'Not existing recipe'},
-                    status=HTTPStatus.NOT_FOUND
-                )
-            instc = foods_models.ShoppingList.objects.filter(
-                author=request.user, recipe__id=id
-            )
-            if instc.exists():
-                instc.delete()
-                return Response(status=HTTPStatus.NO_CONTENT)
+        try:
+            recipe = foods_models.Recipe.objects.get(id=id)
+        except foods_models.Recipe.DoesNotExist:
             return Response(
-                data={'errors': 'Recipe has already deleted!'},
-                status=HTTPStatus.BAD_REQUEST
+                data={'errors': 'Not existing recipe'},
+                status=HTTPStatus.NOT_FOUND
             )
+        instc = recipe.shopping_list_recipes.filter(
+            author=request.user
+        )
+        if instc.exists():
+            instc.delete()
+            return Response(status=HTTPStatus.NO_CONTENT)
+        return Response(
+            data={'errors': 'Recipe has already deleted!'},
+            status=HTTPStatus.BAD_REQUEST
+        )
 
     @action(
         detail=False,

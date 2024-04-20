@@ -1,4 +1,5 @@
 from http import HTTPStatus
+
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from rest_framework.decorators import action
@@ -6,8 +7,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from djoser import views as djoser_views
 
-from apis.pagination import CustomPagination
-from apis.serializers import (
+from api.pagination import CustomPagination
+from api.serializers import (
     UserRetrieveListSerializer,
     CustomUserCreateSerializer,
     FollowingSerializer
@@ -35,7 +36,7 @@ class CustomRetrieveListUserViewSet(djoser_views.UserViewSet):
     def get_serializer_class(self):
         if self.action in {'list', 'retrieve', 'me'}:
             return UserRetrieveListSerializer
-        elif self.request.path.endswith('set_password/'):
+        if self.request.path.endswith('set_password/'):
             return super().get_serializer_class()
         return CustomUserCreateSerializer
 
@@ -72,14 +73,11 @@ class CustomRetrieveListUserViewSet(djoser_views.UserViewSet):
             return Response(serializer.data, status=HTTPStatus.CREATED)
 
         elif request.method == 'DELETE':
-            follow_instance = Follow.objects.filter(user=user, author=author)
+            follow_instance = author.subscribing.filter(user=user)
             if not follow_instance.exists():
                 return Response(
                     data={'errors': 'Not existing subscription'},
                     status=HTTPStatus.BAD_REQUEST
                 )
-            follow_instance = get_object_or_404(
-                Follow, user=user, author=author
-            )
-            follow_instance.delete()
+            follow_instance.first().delete()
             return Response(status=HTTPStatus.NO_CONTENT)

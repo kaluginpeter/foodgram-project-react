@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,7 +34,7 @@ INSTALLED_APPS = [
 
     'users',
     'foods',
-    'apis',
+    'api',
 ]
 
 MIDDLEWARE = [
@@ -115,7 +116,7 @@ REST_FRAMEWORK = {
 
 DJOSER = {
     'LOGIN_FIELD': 'email',
-    'SERIALIZERS': {'user_create': 'apis.serializers.CustomUserCreateSerializer'}
+    'SERIALIZERS': {'user_create': 'api.serializers.CustomUserCreateSerializer'}
 }
 
 LANGUAGE_CODE = 'en-us'
@@ -142,3 +143,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CONSTANTS: dict[str, str | int] = {
+    'MIN_TIME_BOUNDARY': 1,
+    'MAX_TIME_BOUNDARY': 32_000,
+}

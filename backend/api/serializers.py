@@ -3,16 +3,16 @@ import base64
 from django.shortcuts import get_object_or_404
 from django.core.files.base import ContentFile
 from django.contrib.auth import get_user_model
-from rest_framework import serializers as rest_framework_serializers
+from rest_framework import serializers
 from rest_framework import status
 from djoser import serializers as djoser_serializers
 
 from users.models import Follow
 from foods.models import (
     Recipe, Tag,
-    Ingredient, ShoppingList,
-    Favorite, RecipeIngredient
+    Ingredient, RecipeIngredient
 )
+from django.conf import settings
 
 
 User = get_user_model()
@@ -26,10 +26,10 @@ class CustomUserCreateSerializer(djoser_serializers.UserCreateSerializer):
         )
 
 
-class UserRetrieveListSerializer(rest_framework_serializers.ModelSerializer):
-    is_subscribed = rest_framework_serializers.SerializerMethodField()
-    first_name = rest_framework_serializers.CharField(required=False)
-    last_name = rest_framework_serializers.CharField(required=False)
+class UserRetrieveListSerializer(serializers.ModelSerializer):
+    is_subscribed = serializers.SerializerMethodField()
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
 
     class Meta:
         model = User
@@ -39,30 +39,30 @@ class UserRetrieveListSerializer(rest_framework_serializers.ModelSerializer):
         )
 
     def get_is_subscribed(self, obj):
-        if self.context.get('request').user.is_authenticated \
-            and Follow.objects.filter(
-                user=self.context.get('request').user, author=obj
+        if self.context['request'].user.is_authenticated \
+            and obj.subscribing.filter(
+                user=self.context['request'].user
         ).exists():
             return True
         return False
 
 
-class TagSerializer(rest_framework_serializers.ModelSerializer):
+class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ('id', 'name', 'color', 'slug')
 
 
-class IngredientSerializer(rest_framework_serializers.ModelSerializer):
+class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ingredient
         fields = ('id', 'name', 'measurement_unit')
 
 
-class RecipeIngredientSerializer(rest_framework_serializers.ModelSerializer):
-    id = rest_framework_serializers.ReadOnlyField(source='ingredient.id')
-    name = rest_framework_serializers.ReadOnlyField(source='ingredient.name')
-    measurement_unit = rest_framework_serializers.ReadOnlyField(
+class RecipeIngredientSerializer(serializers.ModelSerializer):
+    id = serializers.ReadOnlyField(source='ingredient.id')
+    name = serializers.ReadOnlyField(source='ingredient.name')
+    measurement_unit = serializers.ReadOnlyField(
         source='ingredient.measurement_unit'
     )
 
@@ -72,17 +72,20 @@ class RecipeIngredientSerializer(rest_framework_serializers.ModelSerializer):
 
 
 class CreateIngredientAmountSerializer(
-    rest_framework_serializers.ModelSerializer
+    serializers.ModelSerializer
 ):
-    id = rest_framework_serializers.IntegerField()
-    amount = rest_framework_serializers.IntegerField()
+    id = serializers.IntegerField()
+    amount = serializers.IntegerField(
+        min_value=settings.CONSTANTS.get('MIN_TIME_BOUNDARY'),
+        max_value=settings.CONSTANTS.get('MAX_TIME_BOUNDARY')
+    )
 
     class Meta:
         model = RecipeIngredient
         fields = ('id', 'amount')
 
 
-class Base64ImageField(rest_framework_serializers.ImageField):
+class Base64ImageField(serializers.ImageField):
     def to_internal_value(self, data):
         if isinstance(data, str) and data.startswith('data:image'):
             format, imgstr = data.split(';base64,')
@@ -91,14 +94,14 @@ class Base64ImageField(rest_framework_serializers.ImageField):
         return super().to_internal_value(data)
 
 
-class RecipeSerializer(rest_framework_serializers.ModelSerializer):
+class RecipeSerializer(serializers.ModelSerializer):
     ingredients = RecipeIngredientSerializer(
         source='recipe_ingredients', many=True
     )
     tags = TagSerializer(many=True)
     author = UserRetrieveListSerializer()
-    is_favorited = rest_framework_serializers.SerializerMethodField()
-    is_in_shopping_cart = rest_framework_serializers.SerializerMethodField()
+    is_favorited = serializers.SerializerMethodField()
+    is_in_shopping_cart = serializers.SerializerMethodField()
 
     class Meta:
         model = Recipe
@@ -110,25 +113,23 @@ class RecipeSerializer(rest_framework_serializers.ModelSerializer):
         )
 
     def get_is_in_shopping_cart(self, obj):
-        if self.context.get('request').user.is_authenticated \
-            and ShoppingList.objects.filter(
-                author=self.context.get('request').user,
-                recipe=obj
+        if self.context['request'].user.is_authenticated \
+            and obj.shopping_list_recipes.filter(
+                author=self.context['request'].user
         ).exists():
             return True
         return False
 
     def get_is_favorited(self, obj):
-        if self.context.get('request').user.is_authenticated \
-            and Favorite.objects.filter(
-                author=self.context.get('request').user,
-                recipe=obj
+        if self.context['request'].user.is_authenticated \
+            and obj.favorite_recipes.filter(
+                author=self.context['request'].user
         ).exists():
             return True
         return False
 
 
-class RecipeShortSerializer(rest_framework_serializers.ModelSerializer):
+class RecipeShortSerializer(serializers.ModelSerializer):
     image = Base64ImageField()
 
     class Meta:
@@ -139,14 +140,18 @@ class RecipeShortSerializer(rest_framework_serializers.ModelSerializer):
         )
 
 
-class CreateRecipeSerializer(rest_framework_serializers.ModelSerializer):
+class CreateRecipeSerializer(serializers.ModelSerializer):
     ingredients = CreateIngredientAmountSerializer(
         many=True
     )
-    tags = rest_framework_serializers.PrimaryKeyRelatedField(
+    tags = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Tag.objects.all()
     )
     image = Base64ImageField()
+    cooking_time = serializers.IntegerField(
+        min_value=settings.CONSTANTS.get('MIN_TIME_BOUNDARY'),
+        max_value=settings.CONSTANTS.get('MAX_TIME_BOUNDARY')
+    )
 
     class Meta:
         model = Recipe
@@ -164,7 +169,7 @@ class CreateRecipeSerializer(rest_framework_serializers.ModelSerializer):
         return serializer.data
 
     def create(self, validated_data):
-        validated_data['author'] = self.context.get('request').user
+        validated_data['author'] = self.context['request'].user
         ingredients_data = validated_data.pop('ingredients')
         tags_data = validated_data.pop('tags')
         lst: list = list()
@@ -173,12 +178,15 @@ class CreateRecipeSerializer(rest_framework_serializers.ModelSerializer):
             current_tag = get_object_or_404(Tag, id=tag.id)
             lst.append(current_tag)
         recipe.tags.set(lst)
-        for ingredient_data in ingredients_data:
-            amount = ingredient_data.pop('amount')
-            ingredient = Ingredient.objects.get(id=ingredient_data.get('id'))
-            RecipeIngredient.objects.create(
-                recipe=recipe, ingredient=ingredient, amount=amount
-            )
+        RecipeIngredient.objects.bulk_create([
+            RecipeIngredient(
+                recipe=recipe,
+                ingredient=Ingredient.objects.get(
+                    id=ingredient_data.get('id')
+                ),
+                amount=ingredient_data['amount']
+            ) for ingredient_data in ingredients_data
+        ])
         return recipe
 
     def update(self, instance, validated_data):
@@ -190,32 +198,37 @@ class CreateRecipeSerializer(rest_framework_serializers.ModelSerializer):
         if 'tags' in validated_data:
             tags_data = validated_data.pop('tags')
             instance.tags.set(tags_data)
-
         ingredients_data = validated_data.pop('ingredients')
         RecipeIngredient.objects.filter(recipe=instance).delete()
-        for ingredient_data in ingredients_data:
-            ingredient = Ingredient.objects.get(id=ingredient_data.get('id'))
-            RecipeIngredient.objects.create(
-                recipe=instance, ingredient=ingredient,
-                amount=ingredient_data.get('amount')
-            )
+        RecipeIngredient.objects.bulk_create([
+            RecipeIngredient(
+                recipe=instance,
+                ingredient=Ingredient.objects.get(
+                    id=ingredient_data.get('id')
+                ),
+                amount=ingredient_data['amount']
+            ) for ingredient_data in ingredients_data
+        ])
         instance.save()
         return instance
 
     def validate(self, data):
         tags = data.get('tags')
         if not tags or len(tags) != len(set(tags)):
-            raise rest_framework_serializers.ValidationError(
+            raise serializers.ValidationError(
                 'Tags should be unique and not empty!'
             )
         ingredients = data.get('ingredients')
         if not ingredients:
-            raise rest_framework_serializers.ValidationError(
+            raise serializers.ValidationError(
                 'Ingredients list cant be empty!'
             )
-        if (len([unit.get('id') for unit in ingredients])
-                != len(set([unit.get('id') for unit in ingredients]))):
-            raise rest_framework_serializers.ValidationError(
+        len_unit_in_ingredients: list[int] = [
+            unit.get('id') for unit in ingredients
+        ]
+        if (len(len_unit_in_ingredients)
+                != len(set(len_unit_in_ingredients))):
+            raise serializers.ValidationError(
                 'Ingredients should be unique!'
             )
         for ingredient_data in ingredients:
@@ -224,40 +237,31 @@ class CreateRecipeSerializer(rest_framework_serializers.ModelSerializer):
                     id=ingredient_data.get('id')
                 )
             except Ingredient.DoesNotExist:
-                raise rest_framework_serializers.ValidationError(
+                raise serializers.ValidationError(
                     'Not existing ingredient'
                 )
-            if ingredient_data.get('amount') < 1:
-                raise rest_framework_serializers.ValidationError(
-                    'Amount ingredient cant be less than zero!'
-                )
-        cooking_time = data.get('cooking_time')
-        if cooking_time < 1:
-            raise rest_framework_serializers.ValidationError(
-                'Cooking time cant be less than 1 minute'
-            )
         return data
 
 
 class FollowingSerializer(UserRetrieveListSerializer):
-    recipes_count = rest_framework_serializers.SerializerMethodField()
-    recipes = rest_framework_serializers.SerializerMethodField()
+    recipes_count = serializers.SerializerMethodField()
+    recipes = serializers.SerializerMethodField()
 
     class Meta(UserRetrieveListSerializer.Meta):
-        fields = UserRetrieveListSerializer.Meta.fields \
-            + ('recipes_count', 'recipes')
+        fields = (UserRetrieveListSerializer.Meta.fields
+                  + ('recipes_count', 'recipes'))
         read_only_fields = ('email', 'username')
 
     def validate(self, data):
         author = self.instance
-        user = self.context.get('request').user
-        if Follow.objects.filter(user=user, author=author).exists():
-            raise rest_framework_serializers.ValidationError(
+        user = self.context['request'].user
+        if author.subscribing.filter(user=user).exists():
+            raise serializers.ValidationError(
                 detail='Вы уже подписаны на этого пользователя!',
                 code=status.HTTP_400_BAD_REQUEST
             )
         if user == author:
-            raise rest_framework_serializers.ValidationError(
+            raise serializers.ValidationError(
                 detail='Вы не можете подписаться на самого себя!',
                 code=status.HTTP_400_BAD_REQUEST
             )
