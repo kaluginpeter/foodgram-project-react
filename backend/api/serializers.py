@@ -38,10 +38,10 @@ class UserRetrieveListSerializer(serializers.ModelSerializer):
         )
 
     def get_is_subscribed(self, obj):
-        if self.context['request'].user.is_authenticated \
+        if (self.context['request'].user.is_authenticated
             and obj.subscribing.filter(
                 user=self.context['request'].user
-        ).exists():
+        ).exists()):
             return True
         return False
 
@@ -112,18 +112,18 @@ class RecipeSerializer(serializers.ModelSerializer):
         )
 
     def get_is_in_shopping_cart(self, obj):
-        if self.context['request'].user.is_authenticated \
+        if (self.context['request'].user.is_authenticated
             and obj.shopping_list_recipes.filter(
                 author=self.context['request'].user
-        ).exists():
+        ).exists()):
             return True
         return False
 
     def get_is_favorited(self, obj):
-        if self.context['request'].user.is_authenticated \
+        if (self.context['request'].user.is_authenticated
             and obj.favorite_recipes.filter(
                 author=self.context['request'].user
-        ).exists():
+        ).exists()):
             return True
         return False
 
@@ -167,16 +167,7 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         )
         return serializer.data
 
-    def create(self, validated_data):
-        validated_data['author'] = self.context['request'].user
-        ingredients_data = validated_data.pop('ingredients')
-        tags_data = validated_data.pop('tags')
-        lst: list = list()
-        recipe = Recipe.objects.create(**validated_data)
-        for tag in tags_data:
-            current_tag = get_object_or_404(Tag, id=tag.id)
-            lst.append(current_tag)
-        recipe.tags.set(lst)
+    def bulk_creating_recipe_ingredients(self, sentence, recipe) -> None:
         RecipeIngredient.objects.bulk_create([
             RecipeIngredient(
                 recipe=recipe,
@@ -184,8 +175,22 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
                     id=ingredient_data.get('id')
                 ),
                 amount=ingredient_data['amount']
-            ) for ingredient_data in ingredients_data
+            ) for ingredient_data in sentence
         ])
+
+    def create(self, validated_data):
+        validated_data['author'] = self.context['request'].user
+        ingredients_data = validated_data.pop('ingredients')
+        tags_data = validated_data.pop('tags')
+        list_of_tags: list = []
+        recipe = Recipe.objects.create(**validated_data)
+        for tag in tags_data:
+            current_tag = get_object_or_404(Tag, id=tag.id)
+            list_of_tags.append(current_tag)
+        recipe.tags.set(list_of_tags)
+        self.bulk_creating_recipe_ingredients(
+            sentence=ingredients_data, recipe=recipe
+        )
         return recipe
 
     def update(self, instance, validated_data):
@@ -198,16 +203,10 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
             tags_data = validated_data.pop('tags')
             instance.tags.set(tags_data)
         ingredients_data = validated_data.pop('ingredients')
-        RecipeIngredient.objects.filter(recipe=instance).delete()
-        RecipeIngredient.objects.bulk_create([
-            RecipeIngredient(
-                recipe=instance,
-                ingredient=Ingredient.objects.get(
-                    id=ingredient_data.get('id')
-                ),
-                amount=ingredient_data['amount']
-            ) for ingredient_data in ingredients_data
-        ])
+        instance.recipe_ingredients.all().delete()
+        self.bulk_creating_recipe_ingredients(
+            sentence=ingredients_data, recipe=instance
+        )
         instance.save()
         return instance
 
